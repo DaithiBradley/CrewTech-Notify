@@ -1,0 +1,21 @@
+FROM mcr.microsoft.com/dotnet/aspnet:8.0-alpine AS base
+WORKDIR /app
+
+FROM mcr.microsoft.com/dotnet/sdk:8.0-alpine AS build
+WORKDIR /src
+COPY ["src/CrewTech.Notify.Worker/CrewTech.Notify.Worker.csproj", "Worker/"]
+COPY ["src/CrewTech.Notify.Infrastructure/CrewTech.Notify.Infrastructure.csproj", "Infrastructure/"]
+COPY ["src/CrewTech.Notify.Core/CrewTech.Notify.Core.csproj", "Core/"]
+RUN dotnet restore "Worker/CrewTech.Notify.Worker.csproj"
+
+COPY src/ .
+WORKDIR "/src/Worker"
+RUN dotnet build "CrewTech.Notify.Worker.csproj" -c Release -o /app/build
+
+FROM build AS publish
+RUN dotnet publish "CrewTech.Notify.Worker.csproj" -c Release -o /app/publish
+
+FROM base AS final
+WORKDIR /app
+COPY --from=publish /app/publish .
+ENTRYPOINT ["dotnet", "CrewTech.Notify.Worker.dll"]

@@ -21,6 +21,14 @@ jobs:
       with:
         dotnet-version: '8.0.x'
     
+    - name: Setup Docker Buildx
+      uses: docker/setup-buildx-action@v3
+    
+    - name: Build test Docker images
+      run: |
+        chmod +x scripts/build-test-images.sh
+        ./scripts/build-test-images.sh
+    
     - name: Restore dependencies (exclude Windows projects)
       run: dotnet restore --ignore-failed-sources
     
@@ -38,8 +46,16 @@ jobs:
         dotnet build tests/CrewTech.Notify.Infrastructure.Tests --no-restore --configuration Release
         dotnet build tests/CrewTech.Notify.Integration.Tests --no-restore --configuration Release
     
-    - name: Run tests
-      run: dotnet test --no-build --configuration Release --verbosity normal --logger "trx;LogFileName=test-results.trx"
+    - name: Run unit tests
+      run: |
+        dotnet test tests/CrewTech.Notify.Core.Tests --no-build --configuration Release
+        dotnet test tests/CrewTech.Notify.Infrastructure.Tests --no-build --configuration Release
+    
+    - name: Run integration tests (Testcontainers)
+      run: dotnet test tests/CrewTech.Notify.Integration.Tests --no-build --configuration Release --logger "console;verbosity=detailed"
+      env:
+        TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE: /var/run/docker.sock
+        TESTCONTAINERS_RYUK_DISABLED: false
     
     - name: Publish test results
       uses: dorny/test-reporter@v1
