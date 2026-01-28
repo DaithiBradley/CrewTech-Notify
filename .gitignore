@@ -31,6 +31,7 @@ artifacts/
 *.db
 *.db-shm
 *.db-wal
+data/
 
 # Test Coverage
 coverage/
