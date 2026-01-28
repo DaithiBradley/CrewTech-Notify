@@ -120,6 +120,8 @@ public class NotificationWorker : BackgroundService
             _logger.LogInformation("Retrying {Count} failed notifications", notifications.Count);
         }
 
+        // Process with bounded concurrency - collect tasks to await properly
+        var tasks = new List<Task>();
         foreach (var notification in notifications)
         {
             if (cancellationToken.IsCancellationRequested)
@@ -136,7 +138,7 @@ public class NotificationWorker : BackgroundService
             }
 
             await _semaphore.WaitAsync(cancellationToken);
-            _ = Task.Run(async () =>
+            tasks.Add(Task.Run(async () =>
             {
                 try
                 {
@@ -148,8 +150,10 @@ public class NotificationWorker : BackgroundService
                 {
                     _semaphore.Release();
                 }
-            }, cancellationToken);
+            }, cancellationToken));
         }
+
+        await Task.WhenAll(tasks);
     }
 
     private async Task ProcessNotificationAsync(

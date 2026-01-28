@@ -137,20 +137,20 @@ public class OutboxStateTests
     }
 
     [Fact]
-    public void NotificationMessage_UpdatedAt_ChangesOnStatusUpdate()
+    public void NotificationMessage_UpdatedAt_CanBeUpdated()
     {
         // Arrange
         var notification = new NotificationMessage();
         var originalUpdatedAt = notification.UpdatedAt;
-        
-        System.Threading.Thread.Sleep(10); // Small delay
 
-        // Act
-        notification.UpdatedAt = DateTime.UtcNow;
+        // Act - Set to a future time explicitly
+        var futureTime = DateTime.UtcNow.AddSeconds(5);
+        notification.UpdatedAt = futureTime;
         notification.Status = NotificationStatus.Processing;
 
         // Assert
         Assert.True(notification.UpdatedAt > originalUpdatedAt);
+        Assert.Equal(futureTime, notification.UpdatedAt);
     }
 
     [Fact]

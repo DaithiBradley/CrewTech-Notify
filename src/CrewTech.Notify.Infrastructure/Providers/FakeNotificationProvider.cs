@@ -9,7 +9,6 @@ namespace CrewTech.Notify.Infrastructure.Providers;
 public class FakeNotificationProvider : INotificationProvider
 {
     private readonly ILogger<FakeNotificationProvider> _logger;
-    private readonly Random _random = new();
     
     public FakeNotificationProvider(ILogger<FakeNotificationProvider> logger)
     {
@@ -35,7 +34,8 @@ public class FakeNotificationProvider : INotificationProvider
         }
         
         // Simulate occasional failures for testing retry logic
-        if (_random.Next(100) < 5) // 5% failure rate
+        // Use Random.Shared for thread-safety
+        if (Random.Shared.Next(100) < 5) // 5% failure rate
         {
             _logger.LogWarning("   ⚠️  Simulated transient failure");
             return Task.FromResult(NotificationResult.Fail(

@@ -168,14 +168,13 @@ public class RoutingTests
     }
 
     [Fact]
-    public void NotificationProviderFactory_DuplicatePlatform_UsesLastRegistered()
+    public void NotificationProviderFactory_DuplicatePlatform_ThrowsException()
     {
-        // Arrange - Simulate duplicate platform registration (should not happen but test behavior)
-        var provider1 = CreateMockProvider("Fake", "Provider1");
-        var provider2 = CreateMockProvider("Fake", "Provider2");
+        // Arrange - Create two providers with same platform name
+        var provider1 = CreateMockProvider("Fake");
+        var provider2 = CreateMockProvider("Fake");
         
-        // Act - The factory uses ToDictionary which will throw on duplicates
-        // We expect an exception here
+        // Act & Assert - Dictionary constructor will throw on duplicate keys
         Assert.Throws<ArgumentException>(() => 
             new NotificationProviderFactory(new[] { provider1, provider2 }));
     }
@@ -218,7 +217,7 @@ public class RoutingTests
         Assert.Null(provider);
     }
 
-    private INotificationProvider CreateMockProvider(string platform, string identifier = "")
+    private INotificationProvider CreateMockProvider(string platform)
     {
         var mock = new Mock<INotificationProvider>();
         mock.Setup(p => p.Platform).Returns(platform);
