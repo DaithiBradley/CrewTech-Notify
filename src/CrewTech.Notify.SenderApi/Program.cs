@@ -19,10 +19,22 @@ builder.Services.AddSwaggerGen(c =>
 });
 
 // Database
+var connectionString = builder.Configuration.GetConnectionString("DefaultConnection") 
+    ?? "Data Source=notifications.db";
+
 builder.Services.AddDbContext<NotificationDbContext>(options =>
-    options.UseSqlite(
-        builder.Configuration.GetConnectionString("DefaultConnection") 
-        ?? "Data Source=notifications.db"));
+{
+    if (connectionString.Contains("Host=") || connectionString.Contains("Server="))
+    {
+        // PostgreSQL connection string
+        options.UseNpgsql(connectionString);
+    }
+    else
+    {
+        // SQLite connection string
+        options.UseSqlite(connectionString);
+    }
+});
 
 // Repository
 builder.Services.AddScoped<INotificationRepository, NotificationRepository>();

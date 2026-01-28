@@ -314,6 +314,72 @@ The solution includes:
 - **Unit Tests**: Core domain logic, retry policies, entities
 - **Integration Tests**: Repository operations, database interactions
 - **Provider Tests**: Notification provider implementations
+- **Multi-Container Tests**: Testcontainers-based end-to-end integration tests
+
+## 🐳 Multi-Container Integration Testing
+
+### Overview
+Testcontainers-based integration tests that spin up real Docker containers (PostgreSQL, API, Worker) to test actual inter-container communication.
+
+### Running Tests
+
+```bash
+# 1. Build test Docker images
+./scripts/build-test-images.sh  # or build-test-images.bat on Windows
+
+# 2. Run multi-container integration tests
+dotnet test tests/CrewTech.Notify.Integration.Tests \
+  --filter "FullyQualifiedName~MultiContainerTests" \
+  --logger "console;verbosity=detailed"
+```
+
+### What Gets Tested
+✅ **API → Database communication** (notifications queued)  
+✅ **Worker → Database communication** (notifications processed)  
+✅ **End-to-end flow** (API writes, Worker reads, status updated)  
+✅ **Concurrent requests** (20+ simultaneous notifications)  
+✅ **Idempotency** (duplicate detection across containers)  
+✅ **Retry logic** (Worker retries transient failures)  
+✅ **Health checks** (API responds correctly)
+
+### Test Environment
+- **PostgreSQL 16** (real database, not InMemory)
+- **API container** (real ASP.NET Core app on port 8080)
+- **Worker container** (real background service)
+- **Isolated Docker network** (containers communicate via network aliases)
+- **Automatic cleanup** (all containers removed after tests)
+
+### Example Test Output
+```
+🐳 Starting PostgreSQL container...
+✓ PostgreSQL ready (5 seconds)
+🐳 Starting API container...
+✓ API health check passed (3 seconds)
+🐳 Starting Worker container...
+✓ Worker started (2 seconds)
+
+Step 1: Sending notification to API...
+✓ Notification queued: 8f3c2a1b-4d5e-6789-abcd-ef1234567890
+Step 2: Waiting for Worker to process...
+Step 3: Checking notification status...
+Final status: Sent, Retries: 0
+
+--- Worker Logs ---
+[12:35:01 INF] 📱 Fake notification sent to test-device-e2e
+[12:35:01 INF] ✓ Notification sent successfully
+
+Passed! - FullE2E_SendNotification_WorkerProcesses_DatabaseUpdates
+```
+
+### CI Integration
+GitHub Actions automatically:
+1. Builds test Docker images
+2. Runs multi-container tests
+3. Captures container logs on failure
+4. Cleans up all containers
+
+No manual Docker setup required! 🎉
+
 
 ## 🔧 Project Structure
 

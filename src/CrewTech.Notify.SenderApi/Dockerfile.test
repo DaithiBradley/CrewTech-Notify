@@ -1,0 +1,22 @@
+FROM mcr.microsoft.com/dotnet/aspnet:8.0-alpine AS base
+WORKDIR /app
+EXPOSE 8080
+
+FROM mcr.microsoft.com/dotnet/sdk:8.0-alpine AS build
+WORKDIR /src
+COPY ["src/CrewTech.Notify.SenderApi/CrewTech.Notify.SenderApi.csproj", "SenderApi/"]
+COPY ["src/CrewTech.Notify.Infrastructure/CrewTech.Notify.Infrastructure.csproj", "Infrastructure/"]
+COPY ["src/CrewTech.Notify.Core/CrewTech.Notify.Core.csproj", "Core/"]
+RUN dotnet restore "SenderApi/CrewTech.Notify.SenderApi.csproj"
+
+COPY src/ .
+WORKDIR "/src/SenderApi"
+RUN dotnet build "CrewTech.Notify.SenderApi.csproj" -c Release -o /app/build
+
+FROM build AS publish
+RUN dotnet publish "CrewTech.Notify.SenderApi.csproj" -c Release -o /app/publish
+
+FROM base AS final
+WORKDIR /app
+COPY --from=publish /app/publish .
+ENTRYPOINT ["dotnet", "CrewTech.Notify.SenderApi.dll"]
