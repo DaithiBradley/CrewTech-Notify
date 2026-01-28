@@ -1,0 +1,17 @@
+<Solution>
+  <Folder Name="/samples/">
+    <Project Path="samples/CrewTech.Notify.WindowsClient/CrewTech.Notify.WindowsClient.csproj" />
+  </Folder>
+  <Folder Name="/src/">
+    <Project Path="src/CrewTech.Notify.Cli/CrewTech.Notify.Cli.csproj" />
+    <Project Path="src/CrewTech.Notify.Core/CrewTech.Notify.Core.csproj" />
+    <Project Path="src/CrewTech.Notify.Infrastructure/CrewTech.Notify.Infrastructure.csproj" />
+    <Project Path="src/CrewTech.Notify.SenderApi/CrewTech.Notify.SenderApi.csproj" />
+    <Project Path="src/CrewTech.Notify.Worker/CrewTech.Notify.Worker.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/CrewTech.Notify.Core.Tests/CrewTech.Notify.Core.Tests.csproj" />
+    <Project Path="tests/CrewTech.Notify.Infrastructure.Tests/CrewTech.Notify.Infrastructure.Tests.csproj" />
+    <Project Path="tests/CrewTech.Notify.Integration.Tests/CrewTech.Notify.Integration.Tests.csproj" />
+  </Folder>
+</Solution>
