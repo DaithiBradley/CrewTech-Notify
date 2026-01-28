@@ -17,6 +17,8 @@ public class NotificationWorker : BackgroundService
     private readonly RetryPolicy _retryPolicy;
     private readonly int _batchSize = 10;
     private readonly int _pollingIntervalMs = 5000;
+    private readonly int _maxConcurrency = 10;
+    private readonly SemaphoreSlim _semaphore;
 
     public NotificationWorker(
         ILogger<NotificationWorker> logger,
@@ -27,11 +29,12 @@ public class NotificationWorker : BackgroundService
         _serviceProvider = serviceProvider;
         _providerFactory = providerFactory;
         _retryPolicy = new RetryPolicy();
+        _semaphore = new SemaphoreSlim(_maxConcurrency);
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        _logger.LogInformation("Notification Worker started");
+        _logger.LogInformation("Notification Worker started (max concurrency: {MaxConcurrency})", _maxConcurrency);
         _logger.LogInformation("Supported platforms: {Platforms}", 
             string.Join(", ", _providerFactory.GetSupportedPlatforms()));
 
@@ -59,20 +62,43 @@ public class NotificationWorker : BackgroundService
         var repository = scope.ServiceProvider.GetRequiredService<INotificationRepository>();
 
         var pendingNotifications = await repository.GetPendingAsync(_batchSize, cancellationToken);
-        var notifications = pendingNotifications.ToList();
         
-        if (notifications.Any())
+        // Avoid LINQ .ToList() in hot path - use manual collection
+        var notifications = new List<NotificationMessage>();
+        foreach (var notification in pendingNotifications)
+        {
+            notifications.Add(notification);
+        }
+        
+        if (notifications.Count > 0)
         {
             _logger.LogInformation("Processing {Count} pending notifications", notifications.Count);
         }
 
+        // Process with bounded concurrency
+        var tasks = new List<Task>();
         foreach (var notification in notifications)
         {
             if (cancellationToken.IsCancellationRequested)
                 break;
 
-            await ProcessNotificationAsync(notification, repository, cancellationToken);
+            await _semaphore.WaitAsync(cancellationToken);
+            tasks.Add(Task.Run(async () =>
+            {
+                try
+                {
+                    using var taskScope = _serviceProvider.CreateScope();
+                    var repo = taskScope.ServiceProvider.GetRequiredService<INotificationRepository>();
+                    await ProcessNotificationAsync(notification, repo, cancellationToken);
+                }
+                finally
+                {
+                    _semaphore.Release();
+                }
+            }, cancellationToken));
         }
+
+        await Task.WhenAll(tasks);
     }
 
     private async Task ProcessFailedNotificationsAsync(CancellationToken cancellationToken)
@@ -81,13 +107,21 @@ public class NotificationWorker : BackgroundService
         var repository = scope.ServiceProvider.GetRequiredService<INotificationRepository>();
 
         var failedNotifications = await repository.GetFailedForRetryAsync(_batchSize, cancellationToken);
-        var notifications = failedNotifications.ToList();
         
-        if (notifications.Any())
+        // Avoid LINQ .ToList() in hot path
+        var notifications = new List<NotificationMessage>();
+        foreach (var notification in failedNotifications)
+        {
+            notifications.Add(notification);
+        }
+        
+        if (notifications.Count > 0)
         {
             _logger.LogInformation("Retrying {Count} failed notifications", notifications.Count);
         }
 
+        // Process with bounded concurrency - collect tasks to await properly
+        var tasks = new List<Task>();
         foreach (var notification in notifications)
         {
             if (cancellationToken.IsCancellationRequested)
@@ -103,8 +137,23 @@ public class NotificationWorker : BackgroundService
                 continue;
             }
 
-            await ProcessNotificationAsync(notification, repository, cancellationToken);
+            await _semaphore.WaitAsync(cancellationToken);
+            tasks.Add(Task.Run(async () =>
+            {
+                try
+                {
+                    using var taskScope = _serviceProvider.CreateScope();
+                    var repo = taskScope.ServiceProvider.GetRequiredService<INotificationRepository>();
+                    await ProcessNotificationAsync(notification, repo, cancellationToken);
+                }
+                finally
+                {
+                    _semaphore.Release();
+                }
+            }, cancellationToken));
         }
+
+        await Task.WhenAll(tasks);
     }
 
     private async Task ProcessNotificationAsync(
@@ -174,8 +223,8 @@ public class NotificationWorker : BackgroundService
                         cancellationToken);
                     
                     _logger.LogWarning(
-                        "✗ Notification {Id} moved to dead-letter: {Error}",
-                        notification.Id, result.ErrorMessage);
+                        "✗ Notification {Id} moved to dead-letter ({Category}): {Error}",
+                        notification.Id, result.Category, result.ErrorMessage);
                 }
                 else
                 {
@@ -188,8 +237,8 @@ public class NotificationWorker : BackgroundService
                     
                     var nextDelay = _retryPolicy.CalculateDelay(notification.RetryCount + 1);
                     _logger.LogWarning(
-                        "⚠ Notification {Id} failed, will retry in ~{Delay}s: {Error}",
-                        notification.Id, nextDelay, result.ErrorMessage);
+                        "⚠ Notification {Id} failed ({Category}), will retry in ~{Delay}s: {Error}",
+                        notification.Id, result.Category, nextDelay, result.ErrorMessage);
                 }
             }
         }
@@ -214,6 +263,12 @@ public class NotificationWorker : BackgroundService
                     cancellationToken);
             }
         }
+    }
+
+    public override void Dispose()
+    {
+        _semaphore?.Dispose();
+        base.Dispose();
     }
 }
 

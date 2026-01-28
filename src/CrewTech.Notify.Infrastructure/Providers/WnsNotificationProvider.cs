@@ -59,21 +59,41 @@ public class WnsNotificationProvider : INotificationProvider
             }
             
             var errorContent = await response.Content.ReadAsStringAsync(cancellationToken);
-            var isRetryable = response.StatusCode == System.Net.HttpStatusCode.ServiceUnavailable ||
-                             response.StatusCode == System.Net.HttpStatusCode.InternalServerError;
             
-            _logger.LogWarning("WNS notification failed: {StatusCode} - {Error}", 
-                response.StatusCode, errorContent);
+            // Map HTTP status codes to failure categories
+            var category = response.StatusCode switch
+            {
+                System.Net.HttpStatusCode.BadRequest => FailureCategory.InvalidPayload,
+                System.Net.HttpStatusCode.Unauthorized => FailureCategory.Unauthorized,
+                System.Net.HttpStatusCode.NotFound => FailureCategory.InvalidToken,
+                System.Net.HttpStatusCode.TooManyRequests => FailureCategory.RateLimited,
+                System.Net.HttpStatusCode.ServiceUnavailable => FailureCategory.ServiceUnavailable,
+                System.Net.HttpStatusCode.InternalServerError => FailureCategory.ServiceUnavailable,
+                _ => FailureCategory.Unknown
+            };
+            
+            var isRetryable = category is FailureCategory.ServiceUnavailable 
+                                       or FailureCategory.RateLimited 
+                                       or FailureCategory.Unknown;
+            
+            _logger.LogWarning("WNS notification failed: {StatusCode} ({Category}) - {Error}", 
+                response.StatusCode, category, errorContent);
             
             return NotificationResult.Fail(
                 $"WNS error: {response.StatusCode} - {errorContent}",
                 isRetryable: isRetryable,
-                errorCode: response.StatusCode.ToString());
+                errorCode: response.StatusCode.ToString(),
+                category: category);
+        }
+        catch (HttpRequestException ex)
+        {
+            _logger.LogError(ex, "Network error sending WNS notification to {DeviceToken}", deviceToken);
+            return NotificationResult.Fail(ex.Message, isRetryable: true, category: FailureCategory.NetworkError);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Exception sending WNS notification to {DeviceToken}", deviceToken);
-            return NotificationResult.Fail(ex.Message, isRetryable: true);
+            return NotificationResult.Fail(ex.Message, isRetryable: true, category: FailureCategory.Unknown);
         }
     }
     
@@ -119,7 +139,7 @@ public class WnsNotificationProvider : INotificationProvider
         xml.Append("</binding>");
         xml.Append("</visual>");
         
-        if (data != null && data.Any())
+        if (data != null && data.Count > 0)
         {
             xml.Append("<actions>");
             foreach (var kvp in data)

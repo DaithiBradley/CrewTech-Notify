@@ -32,19 +32,40 @@ public interface INotificationProvider
 /// </summary>
 public class NotificationResult
 {
-    public bool Success { get; set; }
-    public string? ErrorMessage { get; set; }
-    public string? ErrorCode { get; set; }
-    public bool IsRetryable { get; set; }
+    public bool Success { get; init; }
+    public string? ErrorMessage { get; init; }
+    public string? ErrorCode { get; init; }
+    public bool IsRetryable { get; init; }
+    public FailureCategory Category { get; init; }
     
     public static NotificationResult Ok() => new() { Success = true };
     
-    public static NotificationResult Fail(string errorMessage, bool isRetryable = true, string? errorCode = null) =>
+    public static NotificationResult Fail(
+        string errorMessage,
+        bool isRetryable = true,
+        string? errorCode = null,
+        FailureCategory category = FailureCategory.Unknown) =>
         new()
         {
             Success = false,
             ErrorMessage = errorMessage,
             ErrorCode = errorCode,
-            IsRetryable = isRetryable
+            IsRetryable = isRetryable,
+            Category = category
         };
+}
+
+/// <summary>
+/// Classification of notification failures for retry logic
+/// </summary>
+public enum FailureCategory
+{
+    Unknown,
+    NetworkError,          // Retryable
+    ServiceUnavailable,    // Retryable
+    RateLimited,           // Retryable
+    InvalidToken,          // Terminal
+    InvalidPayload,        // Terminal
+    Unauthorized,          // Terminal
+    PlatformNotSupported   // Terminal
 }

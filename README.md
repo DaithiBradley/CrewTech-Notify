@@ -55,6 +55,73 @@
 └───────┘  └───────┘  └───────┘  └────────┘
 ```
 
+## 📋 Architecture & Delivery Guarantees
+
+### Outbox Pattern
+- **At-least-once delivery**: Notifications are stored in database before sending, ensuring no messages are lost
+- **Idempotency**: Duplicate requests are detected via idempotency keys, preventing duplicate notifications
+- **Transactional integrity**: Outbox entries are committed atomically with business transactions
+
+### Retry Strategy
+- **Exponential backoff with jitter**: `delay = baseDelay * 2^retryCount ± jitter` prevents thundering herd
+- **Intelligent failure classification**:
+  - **Retryable failures** (503, 500, network timeouts, rate limits) → Retry up to 5 times
+  - **Terminal failures** (400, 401, 404, invalid tokens) → Immediate dead-letter, no retries
+- **Default configuration**: Base delay 5s, max delay 300s, jitter factor 30%, max 5 retries
+- **Per-notification customization**: Override max retries for critical notifications
+
+### Dead-Letter Queue
+- **Max retries exceeded**: Notifications failing after 5 attempts → DeadLettered status
+- **Terminal failures**: Non-retryable errors (invalid tokens, bad payloads) → Immediate dead-letter
+- **Query DLQ**: `SELECT * FROM NotificationMessages WHERE Status = 'DeadLettered'`
+- **Requeue**: Reset status to Pending for manual retry after fixing root cause
+
+### Worker Performance
+- **Bounded concurrency**: SemaphoreSlim limits concurrent processing (default: 10 notifications)
+- **Cancellation-aware**: Graceful shutdown with CancellationToken propagation
+- **Hot path optimization**: No LINQ allocations in notification processing loop
+- **Polling interval**: Configurable batch processing (default: 5 seconds, 10 notifications per batch)
+
+### CI vs Manual Testing
+
+#### CI Testing (GitHub Actions)
+- **Automated test suite**: 126+ unit tests covering validation, idempotency, retry logic, routing, and state transitions
+- **Platform**: Ubuntu (Linux) for server components, Windows for client sample
+- **Provider**: FakeProvider for deterministic testing without external dependencies
+- **Coverage**: Core domain logic, provider error classification, outbox state machine
+- **No real devices**: CI runs without WNS/FCM credentials—uses FakeProvider only
+
+#### Manual Testing (Local/Staging)
+- **Real device testing**: Configure WNS/FCM credentials in `appsettings.json` to test actual push notifications
+- **Platform verification**: Send notifications to Windows devices (WNS) and Android devices (FCM)
+- **End-to-end validation**: Test full flow with real credentials, device tokens, and network conditions
+- **Performance testing**: Measure throughput, retry behavior, and dead-letter handling under load
+
+### Demo Mode (FakeProvider)
+- **Default in CI**: FakeProvider automatically used when no WNS/FCM credentials configured
+- **5% random failure rate**: Simulates transient errors (503 Service Unavailable) for retry testing
+- **Zero configuration**: Perfect for local development—no API keys or setup required
+- **Observability**: Logs all "sent" notifications with full payload details
+- **Testing scenarios**:
+  ```bash
+  # Start services
+  dotnet run --project src/CrewTech.Notify.SenderApi &
+  dotnet run --project src/CrewTech.Notify.Worker &
+  
+  # Send 100 test notifications (5 will fail and retry)
+  for i in {1..100}; do
+    curl -X POST http://localhost:5000/api/notifications \
+      -H "Content-Type: application/json" \
+      -d '{"targetPlatform":"Fake","deviceToken":"test","title":"Test '$i'","body":"Testing"}';
+  done
+  
+  # Monitor retry behavior in worker logs
+  ```
+
+For detailed documentation, see:
+- [Retry Strategy Guide](docs/RETRY_STRATEGY.md)
+- [Provider Extension Guide](docs/PROVIDER_EXTENSION.md)
+
 ## 🚀 Quick Start
 
 ### Prerequisites
