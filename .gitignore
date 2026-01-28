@@ -65,3 +65,7 @@ logs/
 
 # Windows
 Thumbs.db
+
+# Test configuration with credentials
+**/appsettings.Test.Local.json
+tests/**/appsettings.Development.json

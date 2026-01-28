@@ -316,6 +316,30 @@ The solution includes:
 - **Provider Tests**: Notification provider implementations
 - **Multi-Container Tests**: Testcontainers-based end-to-end integration tests
 
+### Testing with Real Devices
+
+CrewTech-Notify supports testing with real credentials on actual devices. This is **optional** and disabled by default.
+
+See [docs/REAL_DEVICE_TESTING.md](docs/REAL_DEVICE_TESTING.md) for full setup instructions.
+
+**Quick Start:**
+
+```bash
+cd tests/CrewTech.Notify.Infrastructure.Tests
+
+# Configure using User Secrets
+dotnet user-secrets set "TestConfiguration:UseRealCredentials" "true"
+dotnet user-secrets set "WNS:ClientId" "your-client-id"
+dotnet user-secrets set "WNS:ClientSecret" "your-secret"
+dotnet user-secrets set "TestDevices:WNS:DeviceToken" "your-device-token"
+
+# Run real device tests
+dotnet test --filter "FullyQualifiedName~RealDeviceTests"
+```
+
+**⚠️ Important:** This approach tests notification delivery but not app integration. For full E2E testing, use build-and-install approach with UI automation.
+
+
 ## 🐳 Multi-Container Integration Testing
 
 ### Overview
