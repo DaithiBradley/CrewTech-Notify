@@ -1,0 +1,6 @@
+@CrewTech.Notify.SenderApi_HostAddress = http://localhost:5062
+
+GET {{CrewTech.Notify.SenderApi_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
