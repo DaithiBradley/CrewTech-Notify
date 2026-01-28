@@ -70,22 +70,41 @@ public class FcmNotificationProvider : INotificationProvider
             }
             
             var errorContent = await response.Content.ReadAsStringAsync(cancellationToken);
-            var isRetryable = response.StatusCode == System.Net.HttpStatusCode.ServiceUnavailable ||
-                             response.StatusCode == System.Net.HttpStatusCode.InternalServerError ||
-                             response.StatusCode == System.Net.HttpStatusCode.TooManyRequests;
             
-            _logger.LogWarning("FCM notification failed: {StatusCode} - {Error}", 
-                response.StatusCode, errorContent);
+            // Map HTTP status codes to failure categories
+            var category = response.StatusCode switch
+            {
+                System.Net.HttpStatusCode.BadRequest => FailureCategory.InvalidPayload,
+                System.Net.HttpStatusCode.Unauthorized => FailureCategory.Unauthorized,
+                System.Net.HttpStatusCode.NotFound => FailureCategory.InvalidToken,
+                System.Net.HttpStatusCode.TooManyRequests => FailureCategory.RateLimited,
+                System.Net.HttpStatusCode.ServiceUnavailable => FailureCategory.ServiceUnavailable,
+                System.Net.HttpStatusCode.InternalServerError => FailureCategory.ServiceUnavailable,
+                _ => FailureCategory.Unknown
+            };
+            
+            var isRetryable = category is FailureCategory.ServiceUnavailable 
+                                       or FailureCategory.RateLimited 
+                                       or FailureCategory.Unknown;
+            
+            _logger.LogWarning("FCM notification failed: {StatusCode} ({Category}) - {Error}", 
+                response.StatusCode, category, errorContent);
             
             return NotificationResult.Fail(
                 $"FCM error: {response.StatusCode} - {errorContent}",
                 isRetryable: isRetryable,
-                errorCode: response.StatusCode.ToString());
+                errorCode: response.StatusCode.ToString(),
+                category: category);
+        }
+        catch (HttpRequestException ex)
+        {
+            _logger.LogError(ex, "Network error sending FCM notification to {DeviceToken}", deviceToken);
+            return NotificationResult.Fail(ex.Message, isRetryable: true, category: FailureCategory.NetworkError);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Exception sending FCM notification to {DeviceToken}", deviceToken);
-            return NotificationResult.Fail(ex.Message, isRetryable: true);
+            return NotificationResult.Fail(ex.Message, isRetryable: true, category: FailureCategory.Unknown);
         }
     }
 }

@@ -7,7 +7,7 @@ on:
     branches: [ main, develop ]
 
 jobs:
-  build-and-test:
+  build-and-test-linux:
     runs-on: ubuntu-latest
     
     steps:
@@ -18,11 +18,22 @@ jobs:
       with:
         dotnet-version: '8.0.x'
     
-    - name: Restore dependencies
-      run: dotnet restore
+    - name: Restore dependencies (exclude Windows projects)
+      run: dotnet restore --ignore-failed-sources
     
-    - name: Build
-      run: dotnet build --no-restore --configuration Release
+    - name: Build server projects
+      run: |
+        dotnet build src/CrewTech.Notify.Core --no-restore --configuration Release
+        dotnet build src/CrewTech.Notify.Infrastructure --no-restore --configuration Release
+        dotnet build src/CrewTech.Notify.SenderApi --no-restore --configuration Release
+        dotnet build src/CrewTech.Notify.Worker --no-restore --configuration Release
+        dotnet build src/CrewTech.Notify.Cli --no-restore --configuration Release
+    
+    - name: Build test projects
+      run: |
+        dotnet build tests/CrewTech.Notify.Core.Tests --no-restore --configuration Release
+        dotnet build tests/CrewTech.Notify.Infrastructure.Tests --no-restore --configuration Release
+        dotnet build tests/CrewTech.Notify.Integration.Tests --no-restore --configuration Release
     
     - name: Run tests
       run: dotnet test --no-build --configuration Release --verbosity normal --logger "trx;LogFileName=test-results.trx"
@@ -31,18 +42,44 @@ jobs:
       uses: dorny/test-reporter@v1
       if: success() || failure()
       with:
-        name: Test Results
+        name: Test Results (Linux)
         path: '**/test-results.trx'
         reporter: dotnet-trx
     
     - name: Publish API
-      run: dotnet publish src/CrewTech.Notify.SenderApi/CrewTech.Notify.SenderApi.csproj -c Release -o ./publish/api
+      run: dotnet publish src/CrewTech.Notify.SenderApi -c Release -o ./publish/api
     
     - name: Publish Worker
-      run: dotnet publish src/CrewTech.Notify.Worker/CrewTech.Notify.Worker.csproj -c Release -o ./publish/worker
+      run: dotnet publish src/CrewTech.Notify.Worker -c Release -o ./publish/worker
     
     - name: Upload artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: published-apps
+        name: published-apps-linux
         path: ./publish/
+
+  build-windows-sample:
+    runs-on: windows-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '8.0.x'
+    
+    - name: Restore dependencies
+      run: dotnet restore samples/CrewTech.Notify.WindowsClient
+    
+    - name: Build Windows Client
+      run: dotnet build samples/CrewTech.Notify.WindowsClient --no-restore --configuration Release
+    
+    - name: Publish Windows Client
+      run: dotnet publish samples/CrewTech.Notify.WindowsClient -c Release -o ./publish/windows-client
+    
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: published-windows-client
+        path: ./publish/windows-client

@@ -9,6 +9,7 @@ namespace CrewTech.Notify.Infrastructure.Providers;
 public class FakeNotificationProvider : INotificationProvider
 {
     private readonly ILogger<FakeNotificationProvider> _logger;
+    private readonly Random _random = new();
     
     public FakeNotificationProvider(ILogger<FakeNotificationProvider> logger)
     {
@@ -28,17 +29,20 @@ public class FakeNotificationProvider : INotificationProvider
             "📱 Fake notification sent to {DeviceToken}: {Title} - {Body}",
             deviceToken, title, body);
         
-        if (data != null && data.Any())
+        if (data != null && data.Count > 0)
         {
             _logger.LogInformation("   Data: {Data}", string.Join(", ", data.Select(kv => $"{kv.Key}={kv.Value}")));
         }
         
         // Simulate occasional failures for testing retry logic
-        var random = new Random();
-        if (random.Next(100) < 5) // 5% failure rate
+        if (_random.Next(100) < 5) // 5% failure rate
         {
             _logger.LogWarning("   ⚠️  Simulated transient failure");
-            return Task.FromResult(NotificationResult.Fail("Simulated transient failure", isRetryable: true));
+            return Task.FromResult(NotificationResult.Fail(
+                "Simulated transient failure",
+                isRetryable: true,
+                errorCode: "FAKE_TRANSIENT",
+                category: FailureCategory.ServiceUnavailable));
         }
         
         return Task.FromResult(NotificationResult.Ok());
