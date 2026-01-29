@@ -127,16 +127,6 @@ public class NotificationWorker : BackgroundService
             if (cancellationToken.IsCancellationRequested)
                 break;
 
-            // Calculate delay for exponential backoff
-            var delaySeconds = _retryPolicy.CalculateDelay(notification.RetryCount);
-            var timeSinceLastUpdate = (DateTime.UtcNow - notification.UpdatedAt).TotalSeconds;
-            
-            if (timeSinceLastUpdate < delaySeconds)
-            {
-                // Not ready for retry yet
-                continue;
-            }
-
             await _semaphore.WaitAsync(cancellationToken);
             tasks.Add(Task.Run(async () =>
             {
@@ -179,6 +169,7 @@ public class NotificationWorker : BackgroundService
                 await repository.MoveToDeadLetterAsync(
                     notification.Id,
                     $"No provider registered for platform: {notification.TargetPlatform}",
+                    "InvalidPlatform",
                     cancellationToken);
                 return;
             }
@@ -220,6 +211,7 @@ public class NotificationWorker : BackgroundService
                     await repository.MoveToDeadLetterAsync(
                         notification.Id,
                         result.ErrorMessage ?? "Maximum retries exceeded",
+                        result.Category.ToString(),
                         cancellationToken);
                     
                     _logger.LogWarning(
@@ -233,6 +225,7 @@ public class NotificationWorker : BackgroundService
                         notification.Id,
                         result.ErrorMessage ?? "Unknown error",
                         deadLetter: false,
+                        result.Category.ToString(),
                         cancellationToken);
                     
                     var nextDelay = _retryPolicy.CalculateDelay(notification.RetryCount + 1);
@@ -252,6 +245,7 @@ public class NotificationWorker : BackgroundService
                 await repository.MoveToDeadLetterAsync(
                     notification.Id,
                     $"Exception: {ex.Message}",
+                    "Exception",
                     cancellationToken);
             }
             else
@@ -260,6 +254,7 @@ public class NotificationWorker : BackgroundService
                     notification.Id,
                     ex.Message,
                     deadLetter: false,
+                    "Exception",
                     cancellationToken);
             }
         }

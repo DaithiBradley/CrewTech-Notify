@@ -64,9 +64,11 @@
 
 ### Retry Strategy
 - **Exponential backoff with jitter**: `delay = baseDelay * 2^retryCount ± jitter` prevents thundering herd
+- **Polly HTTP retry**: 3 retries at HTTP level for transient network failures (before application-level retry)
 - **Intelligent failure classification**:
   - **Retryable failures** (503, 500, network timeouts, rate limits) → Retry up to 5 times
   - **Terminal failures** (400, 401, 404, invalid tokens) → Immediate dead-letter, no retries
+- **Database-driven scheduling**: NextAttemptUtc ensures workers only process eligible rows
 - **Default configuration**: Base delay 5s, max delay 300s, jitter factor 30%, max 5 retries
 - **Per-notification customization**: Override max retries for critical notifications
 

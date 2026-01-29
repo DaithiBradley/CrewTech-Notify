@@ -1,5 +1,6 @@
 using CrewTech.Notify.Core.Entities;
 using CrewTech.Notify.Core.Interfaces;
+using CrewTech.Notify.Core.Services;
 using CrewTech.Notify.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 
@@ -49,10 +50,12 @@ public class NotificationRepository : INotificationRepository
     
     public async Task<IEnumerable<NotificationMessage>> GetFailedForRetryAsync(int batchSize = 10, CancellationToken cancellationToken = default)
     {
+        var now = DateTime.UtcNow;
         return await _context.NotificationMessages
             .Where(m => m.Status == NotificationStatus.Failed &&
-                       m.RetryCount < m.MaxRetries)
-            .OrderBy(m => m.UpdatedAt)
+                       m.RetryCount < m.MaxRetries &&
+                       (m.NextAttemptUtc == null || m.NextAttemptUtc <= now))
+            .OrderBy(m => m.NextAttemptUtc ?? m.UpdatedAt)
             .Take(batchSize)
             .ToListAsync(cancellationToken);
     }
@@ -70,6 +73,7 @@ public class NotificationRepository : INotificationRepository
         if (message != null)
         {
             message.Status = NotificationStatus.Processing;
+            message.LastAttemptUtc = DateTime.UtcNow;
             message.UpdatedAt = DateTime.UtcNow;
             await _context.SaveChangesAsync(cancellationToken);
         }
@@ -89,7 +93,7 @@ public class NotificationRepository : INotificationRepository
         }
     }
     
-    public async Task MarkAsFailedAsync(Guid id, string errorMessage, bool deadLetter = false, CancellationToken cancellationToken = default)
+    public async Task MarkAsFailedAsync(Guid id, string errorMessage, bool deadLetter = false, string? errorCategory = null, CancellationToken cancellationToken = default)
     {
         var message = await GetByIdAsync(id, cancellationToken);
         if (message != null)
@@ -98,18 +102,30 @@ public class NotificationRepository : INotificationRepository
             message.RetryCount++;
             message.LastError = errorMessage;
             message.ErrorMessage = errorMessage;
+            message.LastAttemptUtc = DateTime.UtcNow;
+            message.LastErrorCategory = errorCategory;
             message.UpdatedAt = DateTime.UtcNow;
+            
+            // Calculate next attempt time using exponential backoff
+            if (!deadLetter)
+            {
+                var retryPolicy = new RetryPolicy();
+                var delaySeconds = retryPolicy.CalculateDelay(message.RetryCount);
+                message.NextAttemptUtc = DateTime.UtcNow.AddSeconds(delaySeconds);
+            }
+            
             await _context.SaveChangesAsync(cancellationToken);
         }
     }
     
-    public async Task MoveToDeadLetterAsync(Guid id, string reason, CancellationToken cancellationToken = default)
+    public async Task MoveToDeadLetterAsync(Guid id, string reason, string? errorCategory = null, CancellationToken cancellationToken = default)
     {
         var message = await GetByIdAsync(id, cancellationToken);
         if (message != null)
         {
             message.Status = NotificationStatus.DeadLettered;
             message.ErrorMessage = reason;
+            message.LastErrorCategory = errorCategory;
             message.UpdatedAt = DateTime.UtcNow;
             await _context.SaveChangesAsync(cancellationToken);
         }

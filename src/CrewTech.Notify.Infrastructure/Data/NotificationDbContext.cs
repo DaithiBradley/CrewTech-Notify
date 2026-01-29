@@ -62,6 +62,7 @@ public class NotificationDbContext : DbContext
             entity.HasIndex(e => e.Status);
             entity.HasIndex(e => e.CreatedAt);
             entity.HasIndex(e => new { e.Status, e.ScheduledFor });
+            entity.HasIndex(e => new { e.Status, e.NextAttemptUtc });
         });
     }
 }
