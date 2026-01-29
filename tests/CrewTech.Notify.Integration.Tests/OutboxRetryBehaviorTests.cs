@@ -94,7 +94,7 @@ public class OutboxRetryBehaviorTests
     }
 
     [Fact]
-    public async Task Idempotency_UniqueConstraint_PreventsDoubleInsert()
+    public async Task GetByIdempotencyKeyAsync_ReturnsFirstMatchingRecord()
     {
         // Arrange
         using var context = CreateInMemoryContext();
@@ -110,16 +110,10 @@ public class OutboxRetryBehaviorTests
         
         await repository.AddAsync(notification1);
         
-        var notification2 = new NotificationMessage
-        {
-            IdempotencyKey = "unique-key-123",
-            Title = "Duplicate",
-            DeviceToken = "device",
-            TargetPlatform = "Fake"
-        };
-        
-        // Act & Assert - InMemory DB doesn't enforce unique constraints, so just verify the first was added
+        // Act - Verify the first record can be retrieved by idempotency key
         var existing = await repository.GetByIdempotencyKeyAsync("unique-key-123");
+        
+        // Assert
         Assert.NotNull(existing);
         Assert.Equal("First", existing.Title);
     }

@@ -50,10 +50,10 @@ public interface INotificationRepository
     /// <summary>
     /// Marks a notification as failed
     /// </summary>
-    Task MarkAsFailedAsync(Guid id, string errorMessage, bool deadLetter = false, CancellationToken cancellationToken = default);
+    Task MarkAsFailedAsync(Guid id, string errorMessage, bool deadLetter = false, string? errorCategory = null, CancellationToken cancellationToken = default);
     
     /// <summary>
     /// Moves a notification to dead-letter queue
     /// </summary>
-    Task MoveToDeadLetterAsync(Guid id, string reason, CancellationToken cancellationToken = default);
+    Task MoveToDeadLetterAsync(Guid id, string reason, string? errorCategory = null, CancellationToken cancellationToken = default);
 }

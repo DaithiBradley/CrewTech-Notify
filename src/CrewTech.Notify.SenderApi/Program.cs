@@ -106,7 +106,7 @@ static IAsyncPolicy<HttpResponseMessage> GetRetryPolicy()
         .WaitAndRetryAsync(
             3, // Max 3 retries at HTTP level
             retryAttempt => TimeSpan.FromSeconds(Math.Pow(2, retryAttempt)) 
-                + TimeSpan.FromMilliseconds(Random.Shared.Next(0, 1000)), // Decorrelated jitter
+                + TimeSpan.FromMilliseconds(Random.Shared.Next(0, 1000)), // Exponential backoff with random jitter
             onRetry: (outcome, timespan, retryCount, context) =>
             {
                 // Log retry attempts

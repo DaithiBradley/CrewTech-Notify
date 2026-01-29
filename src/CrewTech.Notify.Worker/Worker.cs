@@ -169,6 +169,7 @@ public class NotificationWorker : BackgroundService
                 await repository.MoveToDeadLetterAsync(
                     notification.Id,
                     $"No provider registered for platform: {notification.TargetPlatform}",
+                    "InvalidPlatform",
                     cancellationToken);
                 return;
             }
@@ -203,9 +204,6 @@ public class NotificationWorker : BackgroundService
             }
             else
             {
-                // Store error category
-                notification.LastErrorCategory = result.Category.ToString();
-                
                 // Failed - determine if we should retry or dead-letter
                 if (!result.IsRetryable || notification.RetryCount >= notification.MaxRetries - 1)
                 {
@@ -213,6 +211,7 @@ public class NotificationWorker : BackgroundService
                     await repository.MoveToDeadLetterAsync(
                         notification.Id,
                         result.ErrorMessage ?? "Maximum retries exceeded",
+                        result.Category.ToString(),
                         cancellationToken);
                     
                     _logger.LogWarning(
@@ -226,6 +225,7 @@ public class NotificationWorker : BackgroundService
                         notification.Id,
                         result.ErrorMessage ?? "Unknown error",
                         deadLetter: false,
+                        result.Category.ToString(),
                         cancellationToken);
                     
                     var nextDelay = _retryPolicy.CalculateDelay(notification.RetryCount + 1);
@@ -245,6 +245,7 @@ public class NotificationWorker : BackgroundService
                 await repository.MoveToDeadLetterAsync(
                     notification.Id,
                     $"Exception: {ex.Message}",
+                    "Exception",
                     cancellationToken);
             }
             else
@@ -253,6 +254,7 @@ public class NotificationWorker : BackgroundService
                     notification.Id,
                     ex.Message,
                     deadLetter: false,
+                    "Exception",
                     cancellationToken);
             }
         }

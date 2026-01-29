@@ -93,7 +93,7 @@ public class NotificationRepository : INotificationRepository
         }
     }
     
-    public async Task MarkAsFailedAsync(Guid id, string errorMessage, bool deadLetter = false, CancellationToken cancellationToken = default)
+    public async Task MarkAsFailedAsync(Guid id, string errorMessage, bool deadLetter = false, string? errorCategory = null, CancellationToken cancellationToken = default)
     {
         var message = await GetByIdAsync(id, cancellationToken);
         if (message != null)
@@ -103,6 +103,7 @@ public class NotificationRepository : INotificationRepository
             message.LastError = errorMessage;
             message.ErrorMessage = errorMessage;
             message.LastAttemptUtc = DateTime.UtcNow;
+            message.LastErrorCategory = errorCategory;
             message.UpdatedAt = DateTime.UtcNow;
             
             // Calculate next attempt time using exponential backoff
@@ -117,13 +118,14 @@ public class NotificationRepository : INotificationRepository
         }
     }
     
-    public async Task MoveToDeadLetterAsync(Guid id, string reason, CancellationToken cancellationToken = default)
+    public async Task MoveToDeadLetterAsync(Guid id, string reason, string? errorCategory = null, CancellationToken cancellationToken = default)
     {
         var message = await GetByIdAsync(id, cancellationToken);
         if (message != null)
         {
             message.Status = NotificationStatus.DeadLettered;
             message.ErrorMessage = reason;
+            message.LastErrorCategory = errorCategory;
             message.UpdatedAt = DateTime.UtcNow;
             await _context.SaveChangesAsync(cancellationToken);
         }
