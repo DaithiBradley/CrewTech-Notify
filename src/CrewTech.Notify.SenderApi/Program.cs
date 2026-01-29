@@ -3,6 +3,8 @@ using CrewTech.Notify.Infrastructure.Data;
 using CrewTech.Notify.Infrastructure.Providers;
 using CrewTech.Notify.Infrastructure.Repositories;
 using Microsoft.EntityFrameworkCore;
+using Polly;
+using Polly.Extensions.Http;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -40,8 +42,11 @@ builder.Services.AddDbContext<NotificationDbContext>(options =>
 builder.Services.AddScoped<INotificationRepository, NotificationRepository>();
 
 // Providers
-builder.Services.AddHttpClient<WnsNotificationProvider>();
-builder.Services.AddHttpClient<FcmNotificationProvider>();
+builder.Services.AddHttpClient<WnsNotificationProvider>()
+    .AddPolicyHandler(GetRetryPolicy());
+
+builder.Services.AddHttpClient<FcmNotificationProvider>()
+    .AddPolicyHandler(GetRetryPolicy());
 
 builder.Services.AddSingleton<INotificationProvider, FakeNotificationProvider>();
 builder.Services.AddSingleton<INotificationProvider>(sp =>
@@ -92,3 +97,18 @@ app.UseAuthorization();
 app.MapControllers();
 
 app.Run();
+
+static IAsyncPolicy<HttpResponseMessage> GetRetryPolicy()
+{
+    return HttpPolicyExtensions
+        .HandleTransientHttpError() // 5xx, 408
+        .OrResult(msg => msg.StatusCode == System.Net.HttpStatusCode.TooManyRequests)
+        .WaitAndRetryAsync(
+            3, // Max 3 retries at HTTP level
+            retryAttempt => TimeSpan.FromSeconds(Math.Pow(2, retryAttempt)) 
+                + TimeSpan.FromMilliseconds(Random.Shared.Next(0, 1000)), // Decorrelated jitter
+            onRetry: (outcome, timespan, retryCount, context) =>
+            {
+                // Log retry attempts
+            });
+}

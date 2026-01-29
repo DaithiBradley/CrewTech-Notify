@@ -127,16 +127,6 @@ public class NotificationWorker : BackgroundService
             if (cancellationToken.IsCancellationRequested)
                 break;
 
-            // Calculate delay for exponential backoff
-            var delaySeconds = _retryPolicy.CalculateDelay(notification.RetryCount);
-            var timeSinceLastUpdate = (DateTime.UtcNow - notification.UpdatedAt).TotalSeconds;
-            
-            if (timeSinceLastUpdate < delaySeconds)
-            {
-                // Not ready for retry yet
-                continue;
-            }
-
             await _semaphore.WaitAsync(cancellationToken);
             tasks.Add(Task.Run(async () =>
             {
@@ -213,6 +203,9 @@ public class NotificationWorker : BackgroundService
             }
             else
             {
+                // Store error category
+                notification.LastErrorCategory = result.Category.ToString();
+                
                 // Failed - determine if we should retry or dead-letter
                 if (!result.IsRetryable || notification.RetryCount >= notification.MaxRetries - 1)
                 {

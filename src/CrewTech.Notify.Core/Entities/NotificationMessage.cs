@@ -91,6 +91,21 @@ public class NotificationMessage
     /// Last error details
     /// </summary>
     public string? LastError { get; set; }
+    
+    /// <summary>
+    /// When the next retry attempt should occur (UTC)
+    /// </summary>
+    public DateTime? NextAttemptUtc { get; set; }
+    
+    /// <summary>
+    /// When the last attempt was made (UTC)
+    /// </summary>
+    public DateTime? LastAttemptUtc { get; set; }
+    
+    /// <summary>
+    /// Category of the last error
+    /// </summary>
+    public string? LastErrorCategory { get; set; }
 }
 
 /// <summary>
